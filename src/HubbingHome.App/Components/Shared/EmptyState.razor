@@ -1,0 +1,42 @@
+<section class="empty-state">
+    <div class="empty-state-inner">
+        <div class="empty-state-mark" aria-hidden="true">HH</div>
+        <h2 class="empty-state-title">@Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p class="empty-state-description">@Description</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(ActionText) && !string.IsNullOrWhiteSpace(ActionHref))
+        {
+            <a href="@ActionHref" class="primary-button">
+                @ActionText
+            </a>
+        }
+    </div>
+</section>
+
+@code {
+    /// <summary>
+    /// 空状態タイトル
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    /// <summary>
+    /// 空状態説明
+    /// </summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// 操作テキスト
+    /// </summary>
+    [Parameter]
+    public string? ActionText { get; set; }
+
+    /// <summary>
+    /// 操作リンク
+    /// </summary>
+    [Parameter]
+    public string? ActionHref { get; set; }
+}

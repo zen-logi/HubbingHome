@@ -1,0 +1,143 @@
+@page "/settings"
+@inject IApiClientSettingsService SettingsService
+@inject NavigationManager NavigationManager
+
+<PageHeader
+    Eyebrow="Settings"
+    Title="設定"
+    Description="自宅サーバAPIへの接続先を端末内に保存" />
+
+<section class="settings-grid">
+    <article class="soft-card settings-card">
+        <h2 class="panel-title">API 接続</h2>
+        <EditForm Model="formModel" OnValidSubmit="SaveAsync" class="settings-form">
+            <DataAnnotationsValidator />
+
+            <label class="form-field">
+                <span class="field-label">サーバ IP / ホスト / ポート</span>
+                <InputText
+                    @bind-Value="formModel.ServerAddress"
+                    placeholder="例: 192.168.1.20:7224 または https://home.example.local:7224"
+                    class="form-input" />
+                <ValidationMessage For="() => formModel.ServerAddress" class="field-error" />
+            </label>
+
+            <label class="form-field">
+                <span class="field-label">端末トークン</span>
+                <InputText
+                    @bind-Value="formModel.DeviceToken"
+                    type="password"
+                    autocomplete="off"
+                    class="form-input" />
+                <ValidationMessage For="() => formModel.DeviceToken" class="field-error" />
+            </label>
+
+            <p class="form-hint">
+                スキーム省略時は https:// として接続します。LAN内運用では http:// も使用できます。
+            </p>
+
+            <div class="form-actions">
+                <button type="submit" class="primary-button">
+                    <span class="button-icon save-icon" aria-hidden="true"></span>
+                    保存
+                </button>
+                @if (!string.IsNullOrWhiteSpace(saveMessage))
+                {
+                    <StatusBadge Text="@saveMessage" Kind="StatusBadgeKind.Success" />
+                }
+            </div>
+        </EditForm>
+    </article>
+
+    <article class="soft-card settings-card">
+        <h2 class="panel-title">現在の設定</h2>
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>設定状態</dt>
+                <dd>
+                    <StatusBadge Text="@(isConfigured ? "設定済み" : "未設定")" Kind="@(isConfigured ? StatusBadgeKind.Success : StatusBadgeKind.Warning)" />
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>APIベースURL</dt>
+                <dd class="break-all">@apiBaseAddressText</dd>
+            </div>
+            <div class="detail-row">
+                <dt>端末トークン</dt>
+                <dd>@(hasDeviceToken ? "保存済み" : "未設定")</dd>
+            </div>
+        </dl>
+    </article>
+</section>
+
+@code {
+    private readonly SettingsFormModel formModel = new();
+    private string? saveMessage;
+    private string apiBaseAddressText = "未設定";
+    private bool isConfigured;
+    private bool hasDeviceToken;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await SettingsService.GetCurrentAsync();
+        formModel.ServerAddress = settings.ServerAddress;
+        formModel.DeviceToken = settings.DeviceToken;
+        await RefreshApiBaseAddressTextAsync();
+    }
+
+    /// <summary>
+    /// 接続設定を保存
+    /// </summary>
+    private async Task SaveAsync()
+    {
+        await SettingsService.SaveAsync(formModel.ServerAddress, formModel.DeviceToken);
+        saveMessage = "保存済み";
+        await RefreshApiBaseAddressTextAsync();
+        NavigationManager.NavigateTo("/");
+    }
+
+    /// <summary>
+    /// 現在のAPIベースURL表示を更新
+    /// </summary>
+    private async Task RefreshApiBaseAddressTextAsync()
+    {
+        var settings = await SettingsService.GetCurrentAsync();
+        isConfigured = !string.IsNullOrWhiteSpace(settings.ServerAddress)
+            && !string.IsNullOrWhiteSpace(settings.DeviceToken);
+        hasDeviceToken = !string.IsNullOrWhiteSpace(settings.DeviceToken);
+
+        if (!isConfigured)
+        {
+            apiBaseAddressText = "未設定";
+            return;
+        }
+
+        try
+        {
+            apiBaseAddressText = (await SettingsService.GetApiBaseAddressAsync()).ToString();
+        }
+        catch (InvalidOperationException exception)
+        {
+            apiBaseAddressText = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// 設定フォームモデル
+    /// </summary>
+    private sealed class SettingsFormModel
+    {
+        /// <summary>
+        /// サーバアドレス
+        /// </summary>
+        [Required(ErrorMessage = "サーバアドレスを入力してください")]
+        public string ServerAddress { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 端末トークン
+        /// </summary>
+        [Required(ErrorMessage = "端末トークンを入力してください")]
+        public string DeviceToken { get; set; } = string.Empty;
+    }
+}

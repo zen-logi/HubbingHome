@@ -1,0 +1,42 @@
+<article class="soft-card metric-card">
+    <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+            <p class="metric-label">@Label</p>
+            <p class="metric-value">@Value</p>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Accent))
+        {
+            <span class="status-badge status-neutral">@Accent</span>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="metric-description">@Description</p>
+    }
+</article>
+
+@code {
+    /// <summary>
+    /// 指標名
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Label { get; set; }
+
+    /// <summary>
+    /// 指標値
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Value { get; set; }
+
+    /// <summary>
+    /// 補助ラベル
+    /// </summary>
+    [Parameter]
+    public string? Accent { get; set; }
+
+    /// <summary>
+    /// 補足説明
+    /// </summary>
+    [Parameter]
+    public string? Description { get; set; }
+}

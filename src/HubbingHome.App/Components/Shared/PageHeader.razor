@@ -1,0 +1,45 @@
+<section class="page-header">
+    <div class="min-w-0">
+        @if (!string.IsNullOrWhiteSpace(Eyebrow))
+        {
+            <p class="page-eyebrow">@Eyebrow</p>
+        }
+        <h1 class="page-title">@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p class="page-description">@Description</p>
+        }
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="page-actions">
+            @Actions
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>
+    /// 補助見出し
+    /// </summary>
+    [Parameter]
+    public string? Eyebrow { get; set; }
+
+    /// <summary>
+    /// 主見出し
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    /// <summary>
+    /// 説明文
+    /// </summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// 操作領域
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+}

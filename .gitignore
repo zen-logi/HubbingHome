@@ -31,6 +31,11 @@ coverage.*
 *.apk
 *.ipa
 *.app
+!src/HubbingHome.App/
+!src/HubbingHome.App/**
+src/HubbingHome.App/bin/
+src/HubbingHome.App/obj/
+src/HubbingHome.App/node_modules/
 *.xcarchive
 *.dSYM/
 MauiLogs/

@@ -1,0 +1,490 @@
+@page "/"
+@implements IDisposable
+@inject IHubbingHomeApiClient ApiClient
+@inject IApiClientSettingsService SettingsService
+
+@if (!hasCheckedConfiguration || isLoading)
+{
+    <section class="device-grid">
+        @for (var index = 0; index < 4; index++)
+        {
+            <div class="soft-card skeleton-card">
+                <div class="skeleton-line short"></div>
+                <div class="skeleton-grid">
+                    <div class="skeleton-line block"></div>
+                    <div class="skeleton-line block"></div>
+                </div>
+            </div>
+        }
+    </section>
+}
+else if (!isConfigured)
+{
+    <EmptyState
+        Title="自宅サーバAPIを設定してください"
+        Description="初回起動時は、設定画面でサーバのIPアドレス、ポート、端末トークンを保存してください"
+        ActionText="設定を開く"
+        ActionHref="/settings" />
+}
+else if (rooms.Count == 0)
+{
+    <EmptyState
+        Title="操作できる部屋がありません"
+        Description="@emptyStateDescription" />
+}
+else
+{
+    <section class="room-carousel" aria-label="部屋別リモコン">
+        @foreach (var room in rooms)
+        {
+            <section class="@GetRoomSlideClass(room)" aria-labelledby="@($"room-{room.Id}")">
+                <header class="room-slide-header">
+                    <h2 id="@($"room-{room.Id}")" class="overview-title">@room.Name</h2>
+                </header>
+
+                <div class="device-grid">
+                    @foreach (var device in room.Devices)
+                    {
+                        <article class="@GetDeviceCardClass(device)">
+                            <div class="device-card-header">
+                                <div class="device-title-row">
+                                    <span class="device-inline-icon @GetDeviceIconClass(device.Kind)" aria-hidden="true"></span>
+                                    <div>
+                                        <p class="device-kind">@GetDeviceKindText(device.Kind)</p>
+                                        <h2 class="device-name">@device.Name</h2>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (IsTelevisionDevice(device))
+                            {
+                                <div class="tv-remote-grid" aria-label="@($"{device.Name} のリモコン")">
+                                    @foreach (var command in device.Commands)
+                                    {
+                                        <button
+                                            class="@GetTvCommandButtonClass(command)"
+                                            disabled="@isExecuting"
+                                            @onclick="() => ExecuteAsync(room, device, command)">
+                                            <span class="command-icon @GetCommandIconClass(command)" aria-hidden="true"></span>
+                                            <span class="command-name">@command.Name</span>
+                                            @if (command.Parameters is not null && command.Parameters.Count > 0)
+                                            {
+                                                <span class="command-params">@FormatParameters(command.Parameters)</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else if (IsAirConditionerDevice(device))
+                            {
+                                <div class="ac-remote-panel" aria-label="@($"{device.Name} のリモコン")">
+                                    <div class="ac-temperature-dial" aria-hidden="true">
+                                        <span class="ac-temperature-value">@FormatAirConditionerTemperature(device)</span>
+                                        <span class="ac-temperature-unit">°C</span>
+                                        <span class="ac-temperature-label">温度調整</span>
+                                    </div>
+
+                                    <div class="ac-remote-grid">
+                                        @foreach (var command in device.Commands)
+                                        {
+                                            <button
+                                                class="@GetAirConditionerCommandButtonClass(command)"
+                                                disabled="@isExecuting"
+                                                @onclick="() => ExecuteAsync(room, device, command)">
+                                                <span class="command-icon @GetCommandIconClass(command)" aria-hidden="true"></span>
+                                                <span class="command-name">@command.Name</span>
+                                                @if (command.Parameters is not null && command.Parameters.Count > 0)
+                                                {
+                                                    <span class="command-params">@FormatParameters(command.Parameters)</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else if (IsLightDevice(device))
+                            {
+                                <div class="light-remote-grid" aria-label="@($"{device.Name} のリモコン")">
+                                    @foreach (var command in device.Commands)
+                                    {
+                                        <button
+                                            class="@GetLightCommandButtonClass(command)"
+                                            disabled="@isExecuting"
+                                            @onclick="() => ExecuteAsync(room, device, command)">
+                                            <span class="command-icon @GetCommandIconClass(command)" aria-hidden="true"></span>
+                                            <span class="command-name">@command.Name</span>
+                                            @if (command.Parameters is not null && command.Parameters.Count > 0)
+                                            {
+                                                <span class="command-params">@FormatParameters(command.Parameters)</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="command-grid">
+                                    @foreach (var command in device.Commands)
+                                    {
+                                        <button
+                                            class="@GetCommandButtonClass(command)"
+                                            disabled="@isExecuting"
+                                            @onclick="() => ExecuteAsync(room, device, command)">
+                                            <span class="command-icon @GetCommandIconClass(command)" aria-hidden="true"></span>
+                                            <span class="command-name">@command.Name</span>
+                                            @if (command.Parameters is not null && command.Parameters.Count > 0)
+                                            {
+                                                <span class="command-params">@FormatParameters(command.Parameters)</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <article class="error-panel">
+            @errorMessage
+        </article>
+    }
+
+}
+
+@code {
+    private const double DefaultAirConditionerTemperature = 25;
+    private const double AirConditionerTemperatureStep = 0.5;
+    private const string AirConditionerTemperatureKeyPrefix = "RemoteControl.AirConditionerTemperature.";
+
+    private readonly List<RemoteRoomDto> rooms = [];
+    private readonly Dictionary<string, double> airConditionerTemperatures = [];
+    private string? errorMessage;
+    private string emptyStateDescription = "自宅サーバAPIを起動し、RemoteControl設定に部屋とコマンドを登録してください";
+    private bool isLoading = true;
+    private bool isExecuting;
+    private bool isConfigured;
+    private bool hasCheckedConfiguration;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        SettingsService.Changed += OnSettingsChanged;
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// コンポーネント破棄時に設定変更通知を解除
+    /// </summary>
+    public void Dispose()
+    {
+        SettingsService.Changed -= OnSettingsChanged;
+    }
+
+    /// <summary>
+    /// APIから部屋と状態を再取得
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        hasCheckedConfiguration = false;
+        isLoading = true;
+        errorMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        isConfigured = await SettingsService.IsConfiguredAsync();
+        hasCheckedConfiguration = true;
+        if (!isConfigured)
+        {
+            isLoading = false;
+            rooms.Clear();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            rooms.Clear();
+            rooms.AddRange(await ApiClient.GetRoomsAsync());
+            LoadAirConditionerTemperatures();
+        }
+        catch (InvalidOperationException exception)
+        {
+            errorMessage = exception.Message;
+        }
+        catch (HttpRequestException exception)
+        {
+            emptyStateDescription = "自宅サーバAPIへ接続できません。LAN内のAPI URLと端末トークンを確認してください";
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// 選択したコマンドをAPIへ送信
+    /// </summary>
+    private async Task ExecuteAsync(RemoteRoomDto room, RemoteDeviceDto device, RemoteCommandDto command)
+    {
+        isExecuting = true;
+        errorMessage = null;
+
+        try
+        {
+            await ApiClient.ExecuteCommandAsync(
+                new RemoteCommandRequestDto(room.Id, device.Id, command.Id));
+
+            UpdateAirConditionerTemperature(device, command);
+        }
+        catch (InvalidOperationException exception)
+        {
+            errorMessage = exception.Message;
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"送信に失敗しました: {exception.Message}";
+        }
+        finally
+        {
+            isExecuting = false;
+        }
+    }
+
+    /// <summary>
+    /// コマンドボタンのCSSクラスを取得
+    /// </summary>
+    private static string GetCommandButtonClass(RemoteCommandDto command)
+    {
+        const string baseClass = "command-button";
+        return command.Kind == "power" && command.Id == "off"
+            ? $"{baseClass} danger"
+            : baseClass;
+    }
+
+    /// <summary>
+    /// 機器カードのCSSクラスを取得
+    /// </summary>
+    private static string GetDeviceCardClass(RemoteDeviceDto device)
+    {
+        if (IsTelevisionDevice(device))
+        {
+            return "device-card tv-remote-card";
+        }
+
+        if (IsAirConditionerDevice(device))
+        {
+            return "device-card ac-remote-card";
+        }
+
+        return IsLightDevice(device) ? "device-card light-remote-card" : "device-card";
+    }
+
+    /// <summary>
+    /// テレビリモコン用コマンドボタンのCSSクラスを取得
+    /// </summary>
+    private static string GetTvCommandButtonClass(RemoteCommandDto command)
+    {
+        var commandClass = command.Id.Replace("_", "-", StringComparison.Ordinal);
+        return $"{GetCommandButtonClass(command)} tv-command tv-command-{commandClass}";
+    }
+
+    /// <summary>
+    /// エアコンリモコン用コマンドボタンのCSSクラスを取得
+    /// </summary>
+    private static string GetAirConditionerCommandButtonClass(RemoteCommandDto command)
+    {
+        var commandClass = command.Id.Replace("_", "-", StringComparison.Ordinal);
+        return $"{GetCommandButtonClass(command)} ac-command ac-command-{commandClass}";
+    }
+
+    /// <summary>
+    /// 照明リモコン用コマンドボタンのCSSクラスを取得
+    /// </summary>
+    private static string GetLightCommandButtonClass(RemoteCommandDto command)
+    {
+        var commandClass = command.Id.Replace("_", "-", StringComparison.Ordinal);
+        return $"{GetCommandButtonClass(command)} light-command light-command-{commandClass}";
+    }
+
+    /// <summary>
+    /// 保存済みエアコン温度を読み込む
+    /// </summary>
+    private void LoadAirConditionerTemperatures()
+    {
+        foreach (var device in rooms.SelectMany(room => room.Devices).Where(IsAirConditionerDevice))
+        {
+            airConditionerTemperatures[device.Id] = Preferences.Default.Get(
+                GetAirConditionerTemperatureKey(device),
+                DefaultAirConditionerTemperature);
+        }
+    }
+
+    /// <summary>
+    /// エアコン温度コマンドに合わせて表示温度を更新し保存
+    /// </summary>
+    private void UpdateAirConditionerTemperature(RemoteDeviceDto device, RemoteCommandDto command)
+    {
+        if (!IsAirConditionerDevice(device) || command.Kind != "temperature")
+        {
+            return;
+        }
+
+        var currentTemperature = GetAirConditionerTemperature(device);
+        var nextTemperature = command.Id == "temperature_down"
+            ? currentTemperature - AirConditionerTemperatureStep
+            : currentTemperature + AirConditionerTemperatureStep;
+
+        airConditionerTemperatures[device.Id] = nextTemperature;
+        Preferences.Default.Set(GetAirConditionerTemperatureKey(device), nextTemperature);
+    }
+
+    /// <summary>
+    /// エアコンの表示温度を取得
+    /// </summary>
+    private double GetAirConditionerTemperature(RemoteDeviceDto device)
+    {
+        if (airConditionerTemperatures.TryGetValue(device.Id, out var temperature))
+        {
+            return temperature;
+        }
+
+        temperature = Preferences.Default.Get(
+            GetAirConditionerTemperatureKey(device),
+            DefaultAirConditionerTemperature);
+        airConditionerTemperatures[device.Id] = temperature;
+        return temperature;
+    }
+
+    /// <summary>
+    /// エアコンの表示温度を整形
+    /// </summary>
+    private string FormatAirConditionerTemperature(RemoteDeviceDto device)
+    {
+        var temperature = GetAirConditionerTemperature(device);
+        return temperature % 1 == 0
+            ? temperature.ToString("0")
+            : temperature.ToString("0.0");
+    }
+
+    /// <summary>
+    /// エアコン温度保存キーを取得
+    /// </summary>
+    private static string GetAirConditionerTemperatureKey(RemoteDeviceDto device) =>
+        $"{AirConditionerTemperatureKeyPrefix}{device.Id}";
+
+    /// <summary>
+    /// 部屋セクションのCSSクラスを取得
+    /// </summary>
+    private static string GetRoomSlideClass(RemoteRoomDto room) => room.Id switch
+    {
+        "living" => "room-slide room-living",
+        "bedroom" => "room-slide room-bedroom",
+        "workspace" => "room-slide room-workspace",
+        _ => "room-slide room-default"
+    };
+
+    /// <summary>
+    /// 機器種別のアイコンクラスを取得
+    /// </summary>
+    private static string GetDeviceIconClass(string kind) => kind switch
+    {
+        "airConditioner" => "ac-icon",
+        "light" => "light-icon",
+        "tv" => "tv-icon",
+        _ => "remote-icon"
+    };
+
+    /// <summary>
+    /// コマンド種別のアイコンクラスを取得
+    /// </summary>
+    private static string GetCommandIconClass(RemoteCommandDto command) => command.Kind switch
+    {
+        "power" => command.Id == "off" ? "power-off-icon" : "power-icon",
+        "brightness" => command.Icon switch
+        {
+            "sun" => "sun-icon",
+            "moon" => "moon-icon",
+            "plus" => "plus-icon",
+            "minus" => "minus-icon",
+            _ => "spark-icon"
+        },
+        "volume" => command.Icon == "volume-x" ? "mute-icon" : "wave-icon",
+        "navigation" => command.Icon switch
+        {
+            "arrow-up" => "arrow-up-icon",
+            "arrow-down" => "arrow-down-icon",
+            "arrow-left" => "arrow-left-icon",
+            "arrow-right" => "arrow-right-icon",
+            "check" => "check-icon",
+            "undo" => "back-icon",
+            _ => "dot-icon"
+        },
+        "mode" => command.Icon switch
+        {
+            "sparkles" => "auto-icon",
+            "snowflake" => "cool-icon",
+            "flame" => "heat-icon",
+            "droplets" => "dry-icon",
+            "wind" => "fan-icon",
+            _ => "mode-icon"
+        },
+        "temperature" => command.Icon == "minus" ? "minus-icon" : "plus-icon",
+        "scene" => command.Icon == "play" ? "play-icon" : "spark-icon",
+        "diagnostic" => "alert-icon",
+        _ => "dot-icon"
+    };
+
+    /// <summary>
+    /// テレビ専用リモコンとして表示する機器か判定
+    /// </summary>
+    private static bool IsTelevisionDevice(RemoteDeviceDto device) =>
+        device.Kind == "tv" || device.Id == "television";
+
+    /// <summary>
+    /// エアコン専用リモコンとして表示する機器か判定
+    /// </summary>
+    private static bool IsAirConditionerDevice(RemoteDeviceDto device) =>
+        device.Kind == "airConditioner" || device.Id == "aircon";
+
+    /// <summary>
+    /// 照明専用リモコンとして表示する機器か判定
+    /// </summary>
+    private static bool IsLightDevice(RemoteDeviceDto device) =>
+        device.Kind == "light" || device.Id == "light";
+
+    /// <summary>
+    /// 機器種別の表示名を取得
+    /// </summary>
+    private static string GetDeviceKindText(string kind) => kind switch
+    {
+        "airConditioner" => "エアコン",
+        "light" => "照明",
+        "tv" => "テレビ",
+        _ => "リモコン"
+    };
+
+    /// <summary>
+    /// コマンドパラメータを表示用文字列へ整形
+    /// </summary>
+    private static string FormatParameters(IReadOnlyDictionary<string, string> parameters) =>
+        string.Join(" / ", parameters.Select(parameter => $"{parameter.Key}: {parameter.Value}"));
+
+    /// <summary>
+    /// 設定変更時に画面を更新
+    /// </summary>
+    private void OnSettingsChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+}

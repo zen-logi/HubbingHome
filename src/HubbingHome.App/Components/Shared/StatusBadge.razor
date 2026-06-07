@@ -1,0 +1,25 @@
+<span class="@CssClass">@Text</span>
+
+@code {
+    /// <summary>
+    /// 表示テキスト
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Text { get; set; }
+
+    /// <summary>
+    /// 状態種別
+    /// </summary>
+    [Parameter]
+    public StatusBadgeKind Kind { get; set; } = StatusBadgeKind.Neutral;
+
+    private string CssClass => Kind switch
+    {
+        StatusBadgeKind.Success => BaseClass + " status-success",
+        StatusBadgeKind.Warning => BaseClass + " status-warning",
+        StatusBadgeKind.Danger => BaseClass + " status-danger",
+        _ => BaseClass + " status-neutral"
+    };
+
+    private const string BaseClass = "status-badge";
+}
