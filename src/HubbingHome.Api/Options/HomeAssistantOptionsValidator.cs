@@ -5,8 +5,7 @@ namespace HubbingHome.Api.Options;
 /// <summary>
 /// Home Assistant接続設定を検証
 /// </summary>
-public sealed class HomeAssistantOptionsValidator(IWebHostEnvironment environment)
-    : IValidateOptions<HomeAssistantOptions>
+public sealed class HomeAssistantOptionsValidator : IValidateOptions<HomeAssistantOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, HomeAssistantOptions options)
@@ -18,9 +17,9 @@ public sealed class HomeAssistantOptionsValidator(IWebHostEnvironment environmen
             failures.Add("HomeAssistant:BaseUrl must be an absolute URL.");
         }
         else if (baseAddress.Scheme != Uri.UriSchemeHttps
-            && !(environment.IsDevelopment() && options.AllowInsecureHttp && baseAddress.Scheme == Uri.UriSchemeHttp))
+            && !(options.AllowInsecureHttp && baseAddress.Scheme == Uri.UriSchemeHttp))
         {
-            failures.Add("HomeAssistant:BaseUrl must use HTTPS unless AllowInsecureHttp is enabled in Development.");
+            failures.Add("HomeAssistant:BaseUrl must use HTTPS unless AllowInsecureHttp is enabled.");
         }
 
         if (string.IsNullOrWhiteSpace(options.AccessToken)

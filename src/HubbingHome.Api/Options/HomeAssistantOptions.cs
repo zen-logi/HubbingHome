@@ -21,7 +21,7 @@ public sealed class HomeAssistantOptions
     public int RequestTimeoutSeconds { get; init; } = 10;
 
     /// <summary>
-    /// 開発環境でのみHTTP接続を明示的に許可
+    /// HTTP接続を明示的に許可
     /// </summary>
     public bool AllowInsecureHttp { get; init; }
 }
