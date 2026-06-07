@@ -1,0 +1,24 @@
+@HubbingHome.Api_HostAddress = https://localhost:7224
+@DeviceToken = REPLACE_ME_DEVICE_TOKEN
+
+GET {{HubbingHome.Api_HostAddress}}/api/rooms
+Accept: application/json
+X-HubbingHome-Device-Token: {{DeviceToken}}
+
+###
+
+GET {{HubbingHome.Api_HostAddress}}/api/state
+Accept: application/json
+X-HubbingHome-Device-Token: {{DeviceToken}}
+
+###
+
+POST {{HubbingHome.Api_HostAddress}}/api/commands
+Content-Type: application/json
+X-HubbingHome-Device-Token: {{DeviceToken}}
+
+{
+  "roomId": "living",
+  "deviceId": "light",
+  "commandId": "on"
+}

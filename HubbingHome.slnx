@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HubbingHome.Api/HubbingHome.Api.csproj" />
+    <Project Path="src/HubbingHome.App/HubbingHome.App.csproj" />
+    <Project Path="src/HubbingHome.Shared/HubbingHome.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HubbingHome.Api.Tests/HubbingHome.Api.Tests.csproj" />
+  </Folder>
+</Solution>
