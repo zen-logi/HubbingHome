@@ -34,6 +34,8 @@
     <MauiImage Include="Resources\Images\*" />
     <MauiFont Include="Resources\Fonts\*" />
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Remove="package.json;package-lock.json" />
+    <None Include="package.json;package-lock.json" Pack="false" />
   </ItemGroup>
 
   <ItemGroup>

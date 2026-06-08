@@ -1,5 +1,16 @@
 {
   "profiles": {
+    "iPad Simulator": {
+      "commandName": "Executable",
+      "executablePath": "dotnet",
+      "commandLineArgs": "build \"-t:Build;Run\" -f net10.0-ios -c Debug -p:RuntimeIdentifier=iossimulator-arm64 -p:_DeviceName=:v2:udid=A7885776-5538-496D-9673-132576D36E93",
+      "workingDirectory": ".",
+      "nativeDebugging": false
+    },
+    "iOS Simulator": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    },
     "Windows Machine": {
       "commandName": "Project",
       "nativeDebugging": false
