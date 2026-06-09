@@ -6,4 +6,5 @@ namespace HubbingHome.Shared.RemoteControl;
 public sealed record RemoteCommandRequestDto(
     string RoomId,
     string DeviceId,
-    string CommandId);
+    string CommandId,
+    IReadOnlyDictionary<string, string>? Parameters = null);

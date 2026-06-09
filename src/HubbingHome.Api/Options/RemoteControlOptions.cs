@@ -109,8 +109,17 @@ public sealed class RemoteCommandOptions
     public string HomeAssistantCommand { get; init; } = string.Empty;
 
     /// <summary>
+    /// リクエストパラメータからHome Assistantコマンド名を受け取るキー
+    /// </summary>
+    public string? HomeAssistantCommandParameter { get; init; }
+
+    /// <summary>
+    /// リクエスト由来Home Assistantコマンド名の許可パターン
+    /// </summary>
+    public string? HomeAssistantCommandPattern { get; init; }
+
+    /// <summary>
     /// Home Assistantサービスへ渡す追加データ
     /// </summary>
     public IDictionary<string, object?> Data { get; init; } = new Dictionary<string, object?>();
 }
-

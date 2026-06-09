@@ -2,6 +2,7 @@ using HubbingHome.Api.Clients;
 using HubbingHome.Api.Options;
 using HubbingHome.Shared.RemoteControl;
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace HubbingHome.Api.Services;
 
@@ -19,7 +20,7 @@ public sealed class RemoteCommandService(
     public async Task<RemoteCommandResultDto> ExecuteAsync(RemoteCommandRequestDto request, CancellationToken cancellationToken)
     {
         var (room, device, command) = FindAllowedCommand(request);
-        var data = CreateServiceData(command);
+        var data = CreateServiceData(command, request);
 
         logger.LogInformation(
             "Remote command requested. RoomId={RoomId}, DeviceId={DeviceId}, CommandId={CommandId}",
@@ -107,13 +108,48 @@ public sealed class RemoteCommandService(
     /// <summary>
     /// Home Assistantへ送信するサービスデータを作成
     /// </summary>
-    private static Dictionary<string, object?> CreateServiceData(RemoteCommandOptions command)
+    private static Dictionary<string, object?> CreateServiceData(
+        RemoteCommandOptions command,
+        RemoteCommandRequestDto request)
     {
+        var homeAssistantCommand = ResolveHomeAssistantCommand(command, request);
         var data = new Dictionary<string, object?>(command.Data)
         {
-            ["command"] = command.HomeAssistantCommand,
+            ["command"] = homeAssistantCommand,
         };
 
         return data;
+    }
+
+    /// <summary>
+    /// 固定設定または許可済みリクエストパラメータからHome Assistantコマンド名を解決
+    /// </summary>
+    private static string ResolveHomeAssistantCommand(
+        RemoteCommandOptions command,
+        RemoteCommandRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(command.HomeAssistantCommandParameter))
+        {
+            return command.HomeAssistantCommand;
+        }
+
+        if (request.Parameters is null ||
+            !request.Parameters.TryGetValue(command.HomeAssistantCommandParameter, out var requestedCommand) ||
+            string.IsNullOrWhiteSpace(requestedCommand))
+        {
+            throw new RemoteCommandValidationException("Home Assistant command parameter is required");
+        }
+
+        if (string.IsNullOrWhiteSpace(command.HomeAssistantCommandPattern) ||
+            !Regex.IsMatch(
+                requestedCommand,
+                command.HomeAssistantCommandPattern,
+                RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(100)))
+        {
+            throw new RemoteCommandValidationException("Home Assistant command parameter is not allowed");
+        }
+
+        return requestedCommand;
     }
 }

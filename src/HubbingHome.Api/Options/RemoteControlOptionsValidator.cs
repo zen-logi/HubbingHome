@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace HubbingHome.Api.Options;
 
@@ -49,7 +50,21 @@ public sealed class RemoteControlOptionsValidator : IValidateOptions<RemoteContr
                     Require(command.Id, $"Command in device '{device.Id}' Id", failures);
                     Require(command.Name, $"Command '{command.Id}' Name", failures);
                     Require(command.Kind, $"Command '{command.Id}' Kind", failures);
-                    Require(command.HomeAssistantCommand, $"Command '{command.Id}' HomeAssistantCommand", failures);
+                    if (string.IsNullOrWhiteSpace(command.HomeAssistantCommandParameter))
+                    {
+                        Require(command.HomeAssistantCommand, $"Command '{command.Id}' HomeAssistantCommand", failures);
+                    }
+                    else
+                    {
+                        Require(
+                            command.HomeAssistantCommandPattern ?? string.Empty,
+                            $"Command '{command.Id}' HomeAssistantCommandPattern",
+                            failures);
+                        ValidateRegex(
+                            command.HomeAssistantCommandPattern,
+                            $"Command '{command.Id}' HomeAssistantCommandPattern",
+                            failures);
+                    }
 
                     if (command.ServiceDomain != "remote" || command.ServiceName != "send_command")
                     {
@@ -82,6 +97,23 @@ public sealed class RemoteControlOptionsValidator : IValidateOptions<RemoteContr
         if (string.IsNullOrWhiteSpace(value))
         {
             failures.Add($"{label} is required.");
+        }
+    }
+
+    private static void ValidateRegex(string? pattern, string label, List<string> failures)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        }
+        catch (ArgumentException exception)
+        {
+            failures.Add($"{label} is invalid: {exception.Message}");
         }
     }
 

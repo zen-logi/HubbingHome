@@ -42,6 +42,46 @@ public sealed class RemoteCommandServiceTests
     }
 
     [Test]
+    public async Task ExecuteAsync_許可済みリクエストパラメータからHomeAssistantコマンドを送信()
+    {
+        var client = new RecordingHomeAssistantClient();
+        var service = CreateService(client, new RemoteControlStateService());
+
+        await service.ExecuteAsync(
+            new RemoteCommandRequestDto(
+                "living",
+                "aircon",
+                "temperature_up",
+                new Dictionary<string, string>
+                {
+                    ["homeAssistantCommand"] = "cool_25_5",
+                }),
+            CancellationToken.None);
+
+        await Assert.That(client.LastRequest?.Data["command"]).IsEqualTo("cool_25_5");
+        await Assert.That(client.LastRequest?.Data["device"]).IsEqualTo("air_conditioner");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_未許可リクエストパラメータは拒否()
+    {
+        var service = CreateService(new RecordingHomeAssistantClient(), new RemoteControlStateService());
+
+        await Assert.That(async () =>
+            await service.ExecuteAsync(
+                new RemoteCommandRequestDto(
+                    "living",
+                    "aircon",
+                    "temperature_up",
+                    new Dictionary<string, string>
+                    {
+                        ["homeAssistantCommand"] = "cool_29_0",
+                    }),
+                CancellationToken.None))
+            .Throws<RemoteCommandValidationException>();
+    }
+
+    [Test]
     public async Task ExecuteAsync_HomeAssistant失敗時も失敗結果を記録()
     {
         var stateService = new RemoteControlStateService();
@@ -104,6 +144,27 @@ public sealed class RemoteCommandServiceTests
                                     Name = "点灯",
                                     Kind = "power",
                                     HomeAssistantCommand = "living_light_on",
+                                },
+                            ],
+                        },
+                        new RemoteDeviceOptions
+                        {
+                            Id = "aircon",
+                            Name = "エアコン",
+                            Kind = "airConditioner",
+                            Commands =
+                            [
+                                new RemoteCommandOptions
+                                {
+                                    Id = "temperature_up",
+                                    Name = "温度 +0.5",
+                                    Kind = "temperature",
+                                    HomeAssistantCommandParameter = "homeAssistantCommand",
+                                    HomeAssistantCommandPattern = "^(cool_(22_[05]|23_[05]|24_[05]|25_[05]|26_[05]|27_[05]|28_0)|heat_(18_[05]|19_[05]|20_[05]|21_[05]|22_[05]|23_0))$",
+                                    Data = new Dictionary<string, object?>
+                                    {
+                                        ["device"] = "air_conditioner",
+                                    },
                                 },
                             ],
                         },

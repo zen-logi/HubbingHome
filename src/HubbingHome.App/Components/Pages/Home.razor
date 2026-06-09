@@ -158,11 +158,20 @@ else
 
 @code {
     private const double DefaultAirConditionerTemperature = 25;
+    private const double DefaultHeatTemperature = 21;
     private const double AirConditionerTemperatureStep = 0.5;
+    private const double CoolMinimumTemperature = 22;
+    private const double CoolMaximumTemperature = 28;
+    private const double HeatMinimumTemperature = 18;
+    private const double HeatMaximumTemperature = 23;
+    private const string DefaultAirConditionerMode = "cool";
     private const string AirConditionerTemperatureKeyPrefix = "RemoteControl.AirConditionerTemperature.";
+    private const string AirConditionerModeKeyPrefix = "RemoteControl.AirConditionerMode.";
+    private const string HomeAssistantCommandParameterName = "homeAssistantCommand";
 
     private readonly List<RemoteRoomDto> rooms = [];
     private readonly Dictionary<string, double> airConditionerTemperatures = [];
+    private readonly Dictionary<string, string> airConditionerModes = [];
     private string? errorMessage;
     private string emptyStateDescription = "自宅サーバAPIを起動し、RemoteControl設定に部屋とコマンドを登録してください";
     private bool isLoading = true;
@@ -238,10 +247,11 @@ else
 
         try
         {
+            var request = CreateCommandRequest(room, device, command);
             await ApiClient.ExecuteCommandAsync(
-                new RemoteCommandRequestDto(room.Id, device.Id, command.Id));
+                request);
 
-            UpdateAirConditionerTemperature(device, command);
+            UpdateAirConditionerState(device, command);
         }
         catch (InvalidOperationException exception)
         {
@@ -323,26 +333,105 @@ else
             airConditionerTemperatures[device.Id] = Preferences.Default.Get(
                 GetAirConditionerTemperatureKey(device),
                 DefaultAirConditionerTemperature);
+            airConditionerModes[device.Id] = Preferences.Default.Get(
+                GetAirConditionerModeKey(device),
+                DefaultAirConditionerMode);
         }
     }
 
     /// <summary>
-    /// エアコン温度コマンドに合わせて表示温度を更新し保存
+    /// APIへ送信する操作要求を作成
     /// </summary>
-    private void UpdateAirConditionerTemperature(RemoteDeviceDto device, RemoteCommandDto command)
+    private RemoteCommandRequestDto CreateCommandRequest(
+        RemoteRoomDto room,
+        RemoteDeviceDto device,
+        RemoteCommandDto command)
     {
         if (!IsAirConditionerDevice(device) || command.Kind != "temperature")
+        {
+            return new RemoteCommandRequestDto(room.Id, device.Id, command.Id);
+        }
+
+        var mode = GetAirConditionerMode(device);
+        var nextTemperature = CalculateNextAirConditionerTemperature(device, command, mode);
+        var homeAssistantCommand = FormatAirConditionerHomeAssistantCommand(mode, nextTemperature);
+
+        return new RemoteCommandRequestDto(
+            room.Id,
+            device.Id,
+            command.Id,
+            new Dictionary<string, string>
+            {
+                [HomeAssistantCommandParameterName] = homeAssistantCommand,
+            });
+    }
+
+    /// <summary>
+    /// エアコン操作に合わせて表示状態を更新し保存
+    /// </summary>
+    private void UpdateAirConditionerState(RemoteDeviceDto device, RemoteCommandDto command)
+    {
+        if (!IsAirConditionerDevice(device))
         {
             return;
         }
 
-        var currentTemperature = GetAirConditionerTemperature(device);
-        var nextTemperature = command.Id == "temperature_down"
-            ? currentTemperature - AirConditionerTemperatureStep
-            : currentTemperature + AirConditionerTemperatureStep;
+        if (command.Kind == "mode")
+        {
+            UpdateAirConditionerMode(device, command);
+            return;
+        }
+
+        if (command.Kind != "temperature")
+        {
+            return;
+        }
+
+        var mode = GetAirConditionerMode(device);
+        var nextTemperature = CalculateNextAirConditionerTemperature(device, command, mode);
 
         airConditionerTemperatures[device.Id] = nextTemperature;
         Preferences.Default.Set(GetAirConditionerTemperatureKey(device), nextTemperature);
+    }
+
+    /// <summary>
+    /// エアコンの運転モードを保存
+    /// </summary>
+    private void UpdateAirConditionerMode(RemoteDeviceDto device, RemoteCommandDto command)
+    {
+        if (command.Id is not ("cool" or "heat"))
+        {
+            return;
+        }
+
+        airConditionerModes[device.Id] = command.Id;
+        Preferences.Default.Set(GetAirConditionerModeKey(device), command.Id);
+
+        var currentTemperature = GetAirConditionerTemperature(device);
+        if (IsAirConditionerTemperatureInRange(command.Id, currentTemperature))
+        {
+            return;
+        }
+
+        var defaultTemperature = GetDefaultAirConditionerTemperature(command.Id);
+        airConditionerTemperatures[device.Id] = defaultTemperature;
+        Preferences.Default.Set(GetAirConditionerTemperatureKey(device), defaultTemperature);
+    }
+
+    /// <summary>
+    /// 次のエアコン温度を計算
+    /// </summary>
+    private double CalculateNextAirConditionerTemperature(
+        RemoteDeviceDto device,
+        RemoteCommandDto command,
+        string mode)
+    {
+        var currentTemperature = GetAirConditionerTemperature(device);
+        var requestedTemperature = command.Id == "temperature_down"
+            ? currentTemperature - AirConditionerTemperatureStep
+            : currentTemperature + AirConditionerTemperatureStep;
+
+        return ClampAirConditionerTemperature(mode, requestedTemperature);
     }
 
     /// <summary>
@@ -363,6 +452,23 @@ else
     }
 
     /// <summary>
+    /// エアコンの保存済み運転モードを取得
+    /// </summary>
+    private string GetAirConditionerMode(RemoteDeviceDto device)
+    {
+        if (airConditionerModes.TryGetValue(device.Id, out var mode))
+        {
+            return mode;
+        }
+
+        mode = Preferences.Default.Get(
+            GetAirConditionerModeKey(device),
+            DefaultAirConditionerMode);
+        airConditionerModes[device.Id] = mode;
+        return mode;
+    }
+
+    /// <summary>
     /// エアコンの表示温度を整形
     /// </summary>
     private string FormatAirConditionerTemperature(RemoteDeviceDto device)
@@ -378,6 +484,40 @@ else
     /// </summary>
     private static string GetAirConditionerTemperatureKey(RemoteDeviceDto device) =>
         $"{AirConditionerTemperatureKeyPrefix}{device.Id}";
+
+    /// <summary>
+    /// エアコンモード保存キーを取得
+    /// </summary>
+    private static string GetAirConditionerModeKey(RemoteDeviceDto device) =>
+        $"{AirConditionerModeKeyPrefix}{device.Id}";
+
+    /// <summary>
+    /// 学習済みエアコンコマンド名を作成
+    /// </summary>
+    private static string FormatAirConditionerHomeAssistantCommand(string mode, double temperature) =>
+        $"{mode}_{temperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', '_')}";
+
+    /// <summary>
+    /// モード別の既定温度を取得
+    /// </summary>
+    private static double GetDefaultAirConditionerTemperature(string mode) =>
+        mode == "heat" ? DefaultHeatTemperature : DefaultAirConditionerTemperature;
+
+    /// <summary>
+    /// 学習済み範囲内に温度を丸める
+    /// </summary>
+    private static double ClampAirConditionerTemperature(string mode, double temperature)
+    {
+        var minimumTemperature = mode == "heat" ? HeatMinimumTemperature : CoolMinimumTemperature;
+        var maximumTemperature = mode == "heat" ? HeatMaximumTemperature : CoolMaximumTemperature;
+        return Math.Clamp(temperature, minimumTemperature, maximumTemperature);
+    }
+
+    /// <summary>
+    /// 学習済み範囲内の温度か判定
+    /// </summary>
+    private static bool IsAirConditionerTemperatureInRange(string mode, double temperature) =>
+        temperature == ClampAirConditionerTemperature(mode, temperature);
 
     /// <summary>
     /// 部屋セクションのCSSクラスを取得
