@@ -399,23 +399,50 @@ else
     /// </summary>
     private void UpdateAirConditionerMode(RemoteDeviceDto device, RemoteCommandDto command)
     {
-        if (command.Id is not ("cool" or "heat"))
+        var mode = command.Parameters is not null &&
+            command.Parameters.TryGetValue("mode", out var parameterMode)
+            ? parameterMode
+            : command.Id;
+
+        if (mode is not ("cool" or "heat"))
         {
             return;
         }
 
-        airConditionerModes[device.Id] = command.Id;
-        Preferences.Default.Set(GetAirConditionerModeKey(device), command.Id);
+        airConditionerModes[device.Id] = mode;
+        Preferences.Default.Set(GetAirConditionerModeKey(device), mode);
+
+        if (TryGetAirConditionerTemperatureParameter(command, out var commandTemperature))
+        {
+            airConditionerTemperatures[device.Id] = commandTemperature;
+            Preferences.Default.Set(GetAirConditionerTemperatureKey(device), commandTemperature);
+            return;
+        }
 
         var currentTemperature = GetAirConditionerTemperature(device);
-        if (IsAirConditionerTemperatureInRange(command.Id, currentTemperature))
+        if (IsAirConditionerTemperatureInRange(mode, currentTemperature))
         {
             return;
         }
 
-        var defaultTemperature = GetDefaultAirConditionerTemperature(command.Id);
+        var defaultTemperature = GetDefaultAirConditionerTemperature(mode);
         airConditionerTemperatures[device.Id] = defaultTemperature;
         Preferences.Default.Set(GetAirConditionerTemperatureKey(device), defaultTemperature);
+    }
+
+    /// <summary>
+    /// コマンドの表示用温度パラメータを取得
+    /// </summary>
+    private static bool TryGetAirConditionerTemperatureParameter(RemoteCommandDto command, out double temperature)
+    {
+        temperature = default;
+        return command.Parameters is not null &&
+            command.Parameters.TryGetValue("temp", out var parameterTemperature) &&
+            double.TryParse(
+                parameterTemperature,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out temperature);
     }
 
     /// <summary>

@@ -150,6 +150,13 @@ public sealed class RemoteCommandService(
             throw new RemoteCommandValidationException("Home Assistant command parameter is not allowed");
         }
 
+        if (command.HomeAssistantCommandGenerator == "daikin_air_conditioner")
+        {
+            return DaikinAirConditionerBroadlinkCommandGenerator.Generate(
+                requestedCommand,
+                command.DaikinAirConditionerCode ?? new DaikinAirConditionerCodeOptions());
+        }
+
         return requestedCommand;
     }
 }

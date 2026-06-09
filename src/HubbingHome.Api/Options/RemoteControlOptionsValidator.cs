@@ -66,6 +66,8 @@ public sealed class RemoteControlOptionsValidator : IValidateOptions<RemoteContr
                             failures);
                     }
 
+                    ValidateHomeAssistantCommandGenerator(command, failures);
+
                     if (command.ServiceDomain != "remote" || command.ServiceName != "send_command")
                     {
                         failures.Add($"Command '{command.Id}' must use remote.send_command.");
@@ -114,6 +116,51 @@ public sealed class RemoteControlOptionsValidator : IValidateOptions<RemoteContr
         catch (ArgumentException exception)
         {
             failures.Add($"{label} is invalid: {exception.Message}");
+        }
+    }
+
+    private static void ValidateHomeAssistantCommandGenerator(
+        RemoteCommandOptions command,
+        List<string> failures)
+    {
+        if (string.IsNullOrWhiteSpace(command.HomeAssistantCommandGenerator))
+        {
+            return;
+        }
+
+        if (command.HomeAssistantCommandGenerator != "daikin_air_conditioner")
+        {
+            failures.Add($"Command '{command.Id}' HomeAssistantCommandGenerator is not supported.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.HomeAssistantCommandParameter))
+        {
+            failures.Add($"Command '{command.Id}' HomeAssistantCommandParameter is required for generated commands.");
+        }
+
+        var codeOptions = command.DaikinAirConditionerCode;
+        if (codeOptions is null)
+        {
+            failures.Add($"Command '{command.Id}' DaikinAirConditionerCode is required.");
+            return;
+        }
+
+        ValidateByte(
+            codeOptions.CoolFirstFrameModeByte,
+            $"Command '{command.Id}' DaikinAirConditionerCode:CoolFirstFrameModeByte",
+            failures);
+        ValidateByte(
+            codeOptions.HeatFirstFrameModeByte,
+            $"Command '{command.Id}' DaikinAirConditionerCode:HeatFirstFrameModeByte",
+            failures);
+    }
+
+    private static void ValidateByte(int value, string label, List<string> failures)
+    {
+        if (value is < byte.MinValue or > byte.MaxValue)
+        {
+            failures.Add($"{label} must be between 0 and 255.");
         }
     }
 

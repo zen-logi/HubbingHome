@@ -119,7 +119,33 @@ public sealed class RemoteCommandOptions
     public string? HomeAssistantCommandPattern { get; init; }
 
     /// <summary>
+    /// Home Assistantコマンド名を生成する方式
+    /// </summary>
+    public string? HomeAssistantCommandGenerator { get; init; }
+
+    /// <summary>
+    /// Daikinエアコン赤外線コード生成設定
+    /// </summary>
+    public DaikinAirConditionerCodeOptions? DaikinAirConditionerCode { get; init; }
+
+    /// <summary>
     /// Home Assistantサービスへ渡す追加データ
     /// </summary>
     public IDictionary<string, object?> Data { get; init; } = new Dictionary<string, object?>();
+}
+
+/// <summary>
+/// Daikinエアコン赤外線コード生成設定
+/// </summary>
+public sealed class DaikinAirConditionerCodeOptions
+{
+    /// <summary>
+    /// 冷房時の第1フレーム設定バイト
+    /// </summary>
+    public int CoolFirstFrameModeByte { get; init; } = 0x20;
+
+    /// <summary>
+    /// 暖房時の第1フレーム設定バイト
+    /// </summary>
+    public int HeatFirstFrameModeByte { get; init; } = 0x50;
 }
